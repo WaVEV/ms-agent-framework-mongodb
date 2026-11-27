@@ -93,11 +93,15 @@ state migration above.
 `search()` embeds one non-empty query and builds structured BSON for either ANN
 (`numCandidates`) or ENN (`exact: true`). The scope filter is inside
 `$vectorSearch`, before limiting. It returns Agent Framework `Message` values
-with origin session metadata. `before_run()` combines input text, retrieves
-cross-session memories, adds the configured untrusted-data prompt, and injects
-messages through `SessionContext.extend_messages`, which supplies source
-attribution. `after_run()` stores caller input and response while excluding
-provider context.
+with their stored roles and origin metadata. `before_run()` combines input
+text, retrieves cross-session memories, and injects one attributed context
+message through `SessionContext.extend_messages`. Each JSON record quotes the
+text with its original role, source session, and UTC storage time. Missing
+session IDs or timestamps appear as `null`. The context message uses a fixed
+user role, keeping the retrieved text out of privileged model instructions.
+The same message puts the attribution guidance and any custom `context_prompt`
+before the quoted records. `after_run()` stores caller input and response while
+excluding provider context.
 
 Direct `search()` and `store()` calls always surface stable integration errors
 with the PyMongo or generator exception as `__cause__`. Adapter hooks suppress
@@ -147,7 +151,11 @@ deployment must permit the application's network path.
 ## Verification
 
 Unit tests under `python/tests/unit/test_memory_*.py` mock only the embedding
-and MongoDB boundaries. The language-neutral scope fixture under
+and MongoDB boundaries, plus a recording chat client for the recall regression.
+The optional `test_live_model_ignores_planted_instruction` sends synthetic test
+messages to `gpt-4.1-mini`. Install `agent-framework-openai` and set
+`MONGODB_MEMORY_OPENAI_EVAL=1` and `OPENAI_API_KEY` to run it.
+The language-neutral scope fixture under
 `tests/fixtures/memory/` is exercised through the public search API by the
 Python contract test.
 

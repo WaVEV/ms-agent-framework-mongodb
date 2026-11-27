@@ -467,16 +467,25 @@ class MongoDBMemoryContextProvider(ContextProvider):
             raise
         except (MongoDBTransientRetrievalError, MongoDBTimeoutError):
             return
-        if messages:
-            context.extend_instructions(self.source_id, self.context_prompt)
-            origins = [
-                origin
-                for origin in (
-                    message.additional_properties.get("_memory_session_id") for message in messages
-                )
-                if isinstance(origin, str)
-            ]
-            context.extend_messages(self, messages, origin_session_ids=origins or None)
+        if not messages:
+            return
+        records = [
+            {
+                "source_session": message.additional_properties.get("_memory_session_id"),
+                "stored_at": message.additional_properties.get("_memory_stored_at"),
+                "original_role": message.role,
+                "quoted_text": message.text,
+            }
+            for message in messages
+        ]
+        origins = [
+            origin for record in records if isinstance(origin := record["source_session"], str)
+        ]
+        prompt = self.context_prompt
+        if prompt != self.DEFAULT_CONTEXT_PROMPT:
+            prompt = f"{prompt}\n{self.DEFAULT_CONTEXT_PROMPT}"
+        quoted_context = Message("user", [f"{prompt}\n{json.dumps(records)}"])
+        context.extend_messages(self, [quoted_context], origin_session_ids=origins or None)
 
     async def after_run(
         self,
@@ -1030,6 +1039,11 @@ def _message_from_document(document: Mapping[str, Any]) -> Message:
     session_id = document.get("session_id")
     if isinstance(session_id, str):
         properties["_memory_session_id"] = session_id
+    created_at = document.get("created_at")
+    if isinstance(created_at, datetime):
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+        properties["_memory_stored_at"] = created_at.astimezone(timezone.utc).isoformat()
     return Message(
         role,
         [content],
