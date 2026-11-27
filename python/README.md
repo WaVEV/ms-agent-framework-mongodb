@@ -104,6 +104,15 @@ memory = MongoDBMemoryContextProvider(
 await memory.ensure_vector_search_index(wait_until_ready=True)
 ```
 
+In a multi-user application, set `user_id` from the authenticated caller.
+An application- or agent-only scope can retrieve memories across users.
+Conversation text can contain planted instructions or false policy claims.
+Automatic recall presents it as untrusted quotes with provenance. Keep policy
+in application instructions or a trusted knowledge source, and ask the agent
+to say when no authoritative answer is available. If you inject results from
+`search()` yourself, quote them as untrusted data because the API returns
+their original roles.
+
 Run `samples\memory_quickstart.py` after setting `MONGODB_URI`,
 `MONGODB_DATABASE`, and `MONGODB_MEMORY_COLLECTION`. Replace its deterministic
 demonstration generator with a production embedding generator whose dimensions
